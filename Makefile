@@ -649,10 +649,6 @@ KBUILD_CFLAGS	+= $(call cc-disable-warning, address-of-packed-member)
 ifdef CONFIG_CC_OPTIMIZE_FOR_SIZE
 KBUILD_CFLAGS	+= -Os
 else
-ifeq ($(cc-name),gcc)
-KBUILD_CFLAGS	+= -mcpu=cortex-a73.cortex-a53
-KBUILD_AFLAGS	+= -mcpu=cortex-a73.cortex-a53
-endif
 KBUILD_CFLAGS	+= -O2
 endif
 
