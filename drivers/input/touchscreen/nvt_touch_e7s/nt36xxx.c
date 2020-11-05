@@ -41,6 +41,8 @@
 #include <linux/jiffies.h>
 #endif /* #if NVT_TOUCH_ESD_PROTECT */
 
+#include "../lct_tp_gesture.h"
+
 #if NVT_TOUCH_ESD_PROTECT
 static struct delayed_work nvt_esd_check_work;
 static struct workqueue_struct *nvt_esd_check_wq;
@@ -239,7 +241,6 @@ const uint16_t gesture_key_array[] = {
 	KEY_WAKEUP,
 	KEY_WAKEUP,
 	KEY_WAKEUP,
-        KEY_DOUBLE_TAP,
 };
 
 bool enable_gesture_mode = false;
@@ -1255,6 +1256,23 @@ out:
 	return ret;
 }
 
+static int lct_tp_gesture_node_callback(bool flag)
+{
+	if (suspend_state) {
+		NVT_ERR("ERROR: TP is suspend!\n");
+		return -1;
+	}
+	if(flag) {
+		enable_gesture_mode = true;
+		NVT_LOG("enable gesture mode\n");
+	} else {
+		enable_gesture_mode = false;
+		NVT_LOG("disable gesture mode\n");
+	}
+	return 0;
+}
+
+
 /*******************************************************
 Description:
 	Novatek touchscreen driver probe function.
@@ -1268,6 +1286,7 @@ static int32_t nvt_ts_probe(struct i2c_client *client, const struct i2c_device_i
 #if ((TOUCH_KEY_NUM > 0) || WAKEUP_GESTURE)
 	int32_t retry = 0;
 #endif
+	char fw_version[64];
 
 	NVT_LOG("start\n");
 
@@ -1456,6 +1475,13 @@ static int32_t nvt_ts_probe(struct i2c_client *client, const struct i2c_device_i
 			msecs_to_jiffies(NVT_TOUCH_ESD_CHECK_PERIOD));
 #endif /* #if NVT_TOUCH_ESD_PROTECT */
 
+
+
+	ret = init_lct_tp_gesture(lct_tp_gesture_node_callback);
+	if (ret < 0) {
+		NVT_ERR("Failed to add /proc/tp_work node!\n");
+	}
+
 #if NVT_TOUCH_PROC
 	ret = nvt_flash_proc_init();
 	if (ret != 0) {
@@ -1479,6 +1505,14 @@ static int32_t nvt_ts_probe(struct i2c_client *client, const struct i2c_device_i
 		goto err_init_NVT_ts;
 	}
 #endif
+
+  	memset(fw_version, 0, sizeof(fw_version));
+	sprintf(fw_version, "[FW]0x%02x,[IC]nvt36672", ts->fw_ver);
+	if (strstr(g_lcd_id,"tianma nt36672") != NULL) {
+		init_tp_fm_info(0, fw_version, "tianma");
+	} else {
+		init_tp_fm_info(0, fw_version, "huaxing");
+	}
 
 #if defined(CONFIG_FB)
 	ts->fb_notif.notifier_call = fb_notifier_callback;

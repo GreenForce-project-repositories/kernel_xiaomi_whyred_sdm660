@@ -45,6 +45,7 @@
 #ifdef KERNEL_ABOVE_2_6_38
 #include <linux/input/mt.h>
 #endif
+#include "../lct_tp_gesture.h"
 #ifdef CONFIG_TOUCHSCREEN_COMMON
 #include <linux/input/tp_common.h>
 #endif
@@ -955,8 +956,6 @@ static ssize_t synaptics_rmi4_wake_gesture_store(struct device *dev,
 	if (sscanf(buf, "%u", &input) != 1)
 		return -EINVAL;
 
-	input_event(rmi4_data->input_dev, EV_SYN, SYN_CONFIG, input ? WAKEUP_ON : WAKEUP_OFF);
-
 	if(synaptics_gesture_func_on)
 		input = input > 0 ? 1 : 0;
 	else
@@ -1162,10 +1161,8 @@ static int synaptics_rmi4_f11_abs_report(struct synaptics_rmi4_data *rmi4_data,
 
 		if (detected_gestures) {
 			input_report_key(rmi4_data->input_dev, KEY_WAKEUP, 1);
-			input_report_key(rmi4_data->input_dev, KEY_DOUBLE_TAP, 1);
 			input_sync(rmi4_data->input_dev);
 			input_report_key(rmi4_data->input_dev, KEY_WAKEUP, 0);
-			input_report_key(rmi4_data->input_dev, KEY_DOUBLE_TAP, 0);
 			input_sync(rmi4_data->input_dev);
 			rmi4_data->suspend = false;
 		}
@@ -1334,10 +1331,8 @@ static int synaptics_rmi4_f12_abs_report(struct synaptics_rmi4_data *rmi4_data,
 
 		if (gesture_type && gesture_type != F12_UDG_DETECT) {
 			input_report_key(rmi4_data->input_dev, KEY_WAKEUP, 1);
-			input_report_key(rmi4_data->input_dev, KEY_DOUBLE_TAP, 1);
 			input_sync(rmi4_data->input_dev);
 			input_report_key(rmi4_data->input_dev, KEY_WAKEUP, 0);
-			input_report_key(rmi4_data->input_dev, KEY_DOUBLE_TAP, 0);
 			input_sync(rmi4_data->input_dev);
 
 			rmi4_data->suspend = false;
@@ -3521,9 +3516,7 @@ static void synaptics_rmi4_set_params(struct synaptics_rmi4_data *rmi4_data)
 
 	if (rmi4_data->f11_wakeup_gesture || rmi4_data->f12_wakeup_gesture) {
 		set_bit(KEY_WAKEUP, rmi4_data->input_dev->keybit);
-		set_bit(KEY_DOUBLE_TAP, rmi4_data->input_dev->keybit);
 		input_set_capability(rmi4_data->input_dev, EV_KEY, KEY_WAKEUP);
-		input_set_capability(rmi4_data->input_dev, EV_KEY, KEY_DOUBLE_TAP);
 	}
 
 	return;
@@ -4235,6 +4228,27 @@ exit:
 }
 EXPORT_SYMBOL(synaptics_rmi4_new_function);
 
+static int lct_tp_gesture_node_callback(bool flag)
+{
+	unsigned int input;
+	if (rmi4_data->suspend) {
+		pr_err("ERROR: TP is suspend!\n");
+		return -1;
+	}
+	if(flag) {
+		synaptics_gesture_func_on = true;
+		input = 1;
+		pr_err("enable gesture mode\n");
+	} else {
+		synaptics_gesture_func_on = false;
+		input = 0;
+		pr_err("disable gesture mode\n");
+	}
+	if (rmi4_data->f11_wakeup_gesture || rmi4_data->f12_wakeup_gesture)
+		rmi4_data->enable_wakeup_gesture = input;
+	return 0;
+}
+
 static int synaptics_rmi4_probe(struct platform_device *pdev)
 {
 	int retval;
@@ -4393,6 +4407,11 @@ static int synaptics_rmi4_probe(struct platform_device *pdev)
 		}
 	}
 
+	retval = init_lct_tp_gesture(lct_tp_gesture_node_callback);
+	if (retval < 0) {
+		dev_err(&pdev->dev, "Failed to add /proc/tp_gesture node!\n");
+	}
+
 	for (attr_count = 0; attr_count < ARRAY_SIZE(attrs); attr_count++) {
 		retval = sysfs_create_file(&rmi4_data->input_dev->dev.kobj,
 				&attrs[attr_count].attr);
@@ -4430,7 +4449,7 @@ static int synaptics_rmi4_probe(struct platform_device *pdev)
 #endif
 #if  1
 	input_set_capability(rmi4_data->input_dev, EV_KEY, KEY_WAKEUP);
-	input_set_capability(rmi4_data->input_dev, EV_KEY, KEY_DOUBLE_TAP);
+
 	rmi4_data->input_dev->event =synaptics_gesture_switch;
 #endif
 	INIT_WORK(&rmi4_data->fb_notify_work, tp_fb_notifier_resume_work);
