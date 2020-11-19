@@ -1,5 +1,4 @@
 CONFIG_LOCALVERSION="-greenforce - need someone to care"
-# CONFIG_LOCALVERSION_AUTO is not set
 # CONFIG_USELIB is not set
 CONFIG_NO_HZ=y
 CONFIG_HIGH_RES_TIMERS=y
